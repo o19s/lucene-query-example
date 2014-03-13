@@ -9,9 +9,8 @@ import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queries.CustomScoreQuery;
 import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
@@ -20,14 +19,24 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public class BackwardsTermCustomScoreQueryTest extends LuceneTestCase {
-	Field newField(String name, String value, Store stored) {
+public class CountingTermsTest extends LuceneTestCase {
+	
+	Field newFieldAllOn(String name, String value) {
 		FieldType tagsFieldType = new FieldType();
-		tagsFieldType.setStored(stored == Store.YES);
+		tagsFieldType.setStored(true);
 		tagsFieldType.setIndexed(true);
+		tagsFieldType.setOmitNorms(true);
+		tagsFieldType.setStoreTermVectors(true);
+		tagsFieldType.setStoreTermVectorPositions(true);
+		tagsFieldType.setStoreTermVectorPayloads(true);
 		return new Field(name, value, tagsFieldType);
 	}
-
+	
+	TermQuery newTermQuery(String field, String search) {
+		Term t = new Term(field, search);
+		return new TermQuery(t);
+	}
+	
 	IndexSearcher searcherUnderTest;
 	RandomIndexWriter indexWriterUnderTest;
 	IndexReader indexReaderUnderTest;
@@ -38,12 +47,13 @@ public class BackwardsTermCustomScoreQueryTest extends LuceneTestCase {
 		dirUnderTest = newDirectory();
 
 		indexWriterUnderTest = new RandomIndexWriter(random(), dirUnderTest);
-		String[] docs = new String[] { "how now brown cow", "woc",
-				"nworb", "won woh nworb" };
+		String[] docs = new String[] { "star-trek star-wars space tv-shows", "star-trek",
+				"tv-shows", "star-trek tv-shows" };
 		for (int i = 0; i < docs.length; i++) {
 			Document doc = new Document();
-			doc.add(newStringField("id", "" + i, Field.Store.YES));
-			doc.add(newField("field", docs[i], Field.Store.NO));
+			String idStr = Integer.toString(i);
+			doc.add(newFieldAllOn("id", idStr));
+			doc.add(newFieldAllOn("tag", docs[i]));
 			indexWriterUnderTest.addDocument(doc);
 		}
 		indexWriterUnderTest.commit();
@@ -57,16 +67,21 @@ public class BackwardsTermCustomScoreQueryTest extends LuceneTestCase {
 		indexReaderUnderTest.close();
 		indexWriterUnderTest.close();
 		dirUnderTest.close();
+
 	}
 	
 	@Test
-	public void customTest() throws IOException {
-		Term termToFind = new Term("tag", "woc");
-		Query subQ = new TermQuery(termToFind);
-		BackwardsTermCustomQuery q = new BackwardsTermCustomQuery(subQ);
-		TopDocs results = searcherUnderTest.search(subQ, 10);
-		
-		
+	public void testCountingScoring() throws IOException {
+		TermQuery tq = newTermQuery("tag", "star-trek");
+		CountingQuery ct = new CountingQuery(tq);
+	
+		TopDocs td = searcherUnderTest.search(ct, 10);
+		ScoreDoc[] sdocs = td.scoreDocs;
+		assert(sdocs[0].score == 4.0);
+		assert(sdocs[1].score == 2.0);
+		assert(sdocs[2].score == 1.0);
 		
 	}
+
+	
 }

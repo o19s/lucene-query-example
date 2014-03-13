@@ -100,28 +100,14 @@ public class Lucene101Test extends LuceneTestCase {
 
 		iw.commit();
 		
-		Directory d = new RAMDirectory();		
 		IndexReader ir = DirectoryReader.open(d);
 		IndexSearcher is = new IndexSearcher(ir);
 		
 		Term termToFind = new Term("tag", "space");
 		TermQuery tq = new TermQuery(termToFind);
 		
-		
-		Term termToFind = new Term("tag", "space");
-		TermQuery spaceQ = new TermQuery(termToFind);
-		
-		termToFind = new Term("tag", "star-trek");
-		TermQuery starTrekQ = new TermQuery(termToFind);
-		
-		BooleanQuery bq = new BooleanQuery();
-		BooleanClause bClause = new BooleanClause(spaceQ, Occur.MUST);
-		BooleanClause bClause2 = new BooleanClause(starTrekQ, Occur.SHOULD);
-		bq.add(bClause);
-		bq.add(bClause2);
-		
 		TopDocs td = is.search(tq, 10);
-		assert(td.scoreDocs.length == 1);
+		assert(td.scoreDocs.length == 2);
 
 		
 	}
