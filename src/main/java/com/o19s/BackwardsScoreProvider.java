@@ -2,13 +2,13 @@ package com.o19s;
 
 import java.io.IOException;
 
-import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.queries.CustomScoreProvider;
 
 public class BackwardsScoreProvider extends CustomScoreProvider {
 	
-	  public BackwardsScoreProvider(AtomicReaderContext context) {
+	  public BackwardsScoreProvider(LeafReaderContext context) {
 		super(context);
 	}
 

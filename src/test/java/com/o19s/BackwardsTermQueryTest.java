@@ -8,6 +8,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.Field.Store;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.search.IndexSearcher;
@@ -25,7 +26,8 @@ public class BackwardsTermQueryTest extends LuceneTestCase {
 	Field newField(String name, String value, Store stored) {
 		FieldType tagsFieldType = new FieldType();
 		tagsFieldType.setStored(stored == Store.YES);
-		tagsFieldType.setIndexed(true);
+		IndexOptions opts = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+		tagsFieldType.setIndexOptions(opts);
 		return new Field(name, value, tagsFieldType);
 	}
 

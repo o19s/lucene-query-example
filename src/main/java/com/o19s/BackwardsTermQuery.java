@@ -1,9 +1,11 @@
 package com.o19s;
 
 import java.io.IOException;
+import java.util.Set;
 
-import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -29,7 +31,7 @@ public class BackwardsTermQuery extends Query {
 	}
 	
 	@Override
-	public Weight createWeight(IndexSearcher searcher) throws IOException {
+	public Weight createWeight(IndexSearcher searcher, boolean needsScores, float boost) throws IOException {
 		return new BackwardsWeight(searcher);
 	}
 	
@@ -38,22 +40,19 @@ public class BackwardsTermQuery extends Query {
 		if (this == other) {
 			return true;
 		}
-		if (!super.equals(other)) {
+        if (other == null) {
+            return false;
+        }
+		if (getClass() != other.getClass()) {
 			return false;
 		}
-		if (getClass() != other .getClass()) {
-			return false;
-		}
-		BackwardsTermQuery otherQ = (BackwardsTermQuery)(other);		
-		if (otherQ.getBoost() != getBoost()) {
-			return false;
-		}
+		BackwardsTermQuery otherQ = (BackwardsTermQuery)(other);
 		return otherQ.backwardsQuery.equals(backwardsQuery) && otherQ.forwardsQuery.equals(forwardsQuery);
 	}
 	
 	@Override
 	public int hashCode() {
-		return super.hashCode() + backwardsQuery.hashCode() + forwardsQuery.hashCode(); 
+		return classHash() + backwardsQuery.hashCode() + forwardsQuery.hashCode();
 	}
 	
 	public class BackwardsWeight extends Weight {
@@ -62,40 +61,43 @@ public class BackwardsTermQuery extends Query {
 		Weight forwardsWeight = null;
 		
 		public BackwardsWeight(IndexSearcher searcher) throws IOException {
-			super();
-			backwardsWeight = backwardsQuery.createWeight(searcher);
-			forwardsWeight = forwardsQuery.createWeight(searcher);
+			super(BackwardsTermQuery.this);
+			backwardsWeight = backwardsQuery.createWeight(searcher, true, 1.0f);
+			forwardsWeight = forwardsQuery.createWeight(searcher, true, 1.0f);
 		}
 		
 		@Override
-		public Explanation explain(AtomicReaderContext context, int doc)
+		public Explanation explain(LeafReaderContext context, int doc)
 				throws IOException {
 			return null;
 		}
+
+        public boolean isCacheable(LeafReaderContext var1) {
+		    return false;
+        }
+
+        public void extractTerms(Set<Term> terms) {
+
+        }
+
+
+//		@Override
+//		public float getValueForNormalization() throws IOException {
+//			return backwardsWeight() +
+//					forwardsWeight.getValueForNormalization();
+//		}
+//
+//		@Override
+//		public void normalize(float norm, float topLevelBoost) {
+//			backwardsWeight.normalize(norm, topLevelBoost);
+//			forwardsWeight.normalize(norm, topLevelBoost);
+//		}
 	
 		@Override
-		public Query getQuery() {
-			return BackwardsTermQuery.this ;
-		}
-	
-		@Override
-		public float getValueForNormalization() throws IOException {
-			return backwardsWeight.getValueForNormalization() + 
-					forwardsWeight.getValueForNormalization();
-		}
-	
-		@Override
-		public void normalize(float norm, float topLevelBoost) {
-			backwardsWeight.normalize(norm, topLevelBoost);
-			forwardsWeight.normalize(norm, topLevelBoost);
-		}
-	
-		@Override
-		public Scorer scorer(AtomicReaderContext context, boolean scoreDocsInOrder,
-				boolean topScorer, Bits acceptDocs) throws IOException {
+		public Scorer scorer(LeafReaderContext context) throws IOException {
 			// TODO Auto-generated method stub
-			Scorer backwardsScorer = backwardsWeight.scorer(context, scoreDocsInOrder, topScorer, acceptDocs);
-			Scorer forwardsScorer = forwardsWeight.scorer(context, scoreDocsInOrder, topScorer, acceptDocs);
+			Scorer backwardsScorer = backwardsWeight.scorer(context);
+			Scorer forwardsScorer = forwardsWeight.scorer(context);
 			return new BackwardsScorer(this, context, backwardsScorer, forwardsScorer);
 		}
 	}
@@ -109,7 +111,7 @@ public class BackwardsTermQuery extends Query {
 		Scorer backwardsScorer = null;
 		Scorer forwardsScorer = null;
 		
-		protected BackwardsScorer(Weight weight, AtomicReaderContext context,
+		protected BackwardsScorer(Weight weight, LeafReaderContext context,
 								  Scorer _backwardsScorer, Scorer _forwardsScorer) throws IOException {
 			super(weight);
 			backwardsScorer = _backwardsScorer;
@@ -121,50 +123,55 @@ public class BackwardsTermQuery extends Query {
 			return currScore;
 		}
 
-		@Override
-		public int freq() throws IOException {
-			return 1;
-		}
+        public DocIdSetIterator iterator() {
+		    return new DocIdSetIterator() {
+                @Override
+                public int docID() {
+                    int backwordsDocId = backwardsScorer.docID();
+                    int forwardsDocId = forwardsScorer.docID();
+                    if (backwordsDocId <= forwardsDocId && backwordsDocId != NO_MORE_DOCS) {
+                        currScore = BACKWARDS_SCORE;
+                        return backwordsDocId;
+                    } else if (forwardsDocId != NO_MORE_DOCS) {
+                        currScore = FORWARDS_SCORE;
+                        return forwardsDocId;
+                    }
+                    return NO_MORE_DOCS;
+                }
+
+                @Override
+                public int nextDoc() throws IOException {
+                    int currDocId = docID();
+                    // increment one or both
+                    if (currDocId == backwardsScorer.docID()) {
+                        backwardsScorer.iterator().nextDoc();
+                    }
+                    if (currDocId == forwardsScorer.docID()) {
+                        forwardsScorer.iterator().nextDoc();
+                    }
+                    return docID();
+                }
+
+
+                @Override
+                public int advance(int target) throws IOException {
+                    backwardsScorer.iterator().advance(target);
+                    forwardsScorer.iterator().advance(target);
+                    return docID();                }
+
+                @Override
+                public long cost() {
+                    return 1;
+                }
+            };
+        }
 
 		@Override
 		public int docID() {
-			int backwordsDocId = backwardsScorer.docID();
-			int forwardsDocId = forwardsScorer.docID();
-			if (backwordsDocId <= forwardsDocId && backwordsDocId != NO_MORE_DOCS) {
-				currScore = BACKWARDS_SCORE;
-				return backwordsDocId;
-			} else if (forwardsDocId != NO_MORE_DOCS) {
-				currScore = FORWARDS_SCORE;
-				return forwardsDocId;
-			}
-			return NO_MORE_DOCS;
+			return iterator().docID();
 		}	
 
-		@Override
-		public int nextDoc() throws IOException {
-			int currDocId = docID();
-			// increment one or both
-			if (currDocId == backwardsScorer.docID()) {
-				backwardsScorer.nextDoc();
-			}
-			if (currDocId == forwardsScorer.docID()) {
-				forwardsScorer.nextDoc();
-			}
-			return docID();
-		}
 
-		@Override
-		public int advance(int target) throws IOException {
-			backwardsScorer.advance(target);
-			forwardsScorer.advance(target);
-			return docID();
-		}
-
-		@Override
-		public long cost() {
-			return 1;
-		}
-		
 	}
 
 	@Override

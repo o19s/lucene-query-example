@@ -6,6 +6,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.Field.Store;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -24,7 +25,8 @@ public class CountingTermsTest extends LuceneTestCase {
 	Field newFieldAllOn(String name, String value) {
 		FieldType tagsFieldType = new FieldType();
 		tagsFieldType.setStored(true);
-		tagsFieldType.setIndexed(true);
+		IndexOptions opts = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+		tagsFieldType.setIndexOptions(opts);
 		tagsFieldType.setOmitNorms(true);
 		tagsFieldType.setStoreTermVectors(true);
 		tagsFieldType.setStoreTermVectorPositions(true);

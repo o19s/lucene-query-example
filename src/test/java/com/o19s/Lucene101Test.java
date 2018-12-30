@@ -9,6 +9,7 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -33,7 +34,8 @@ public class Lucene101Test extends LuceneTestCase {
 	Field newField(String name, String value, Store stored) {
 		FieldType tagsFieldType = new FieldType();
 		tagsFieldType.setStored(stored == Store.YES);
-		tagsFieldType.setIndexed(true);
+		IndexOptions opts = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+		tagsFieldType.setIndexOptions(opts);
 		return new Field(name, value, tagsFieldType);
 	}
 
@@ -71,19 +73,20 @@ public class Lucene101Test extends LuceneTestCase {
 	@Test
 	public void testBasics() throws IOException {
 		Directory d = new RAMDirectory();
+		IndexOptions opts = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+
+		WhitespaceAnalyzer analyzer = new WhitespaceAnalyzer();
 		
-		WhitespaceAnalyzer analyzer = new WhitespaceAnalyzer(Version.LUCENE_46);
-		
-		IndexWriterConfig iwc = new IndexWriterConfig(Version.LUCENE_46, analyzer);
+		IndexWriterConfig iwc = new IndexWriterConfig(analyzer);
 		IndexWriter iw = new IndexWriter(d, iwc);
 		
 		Document doc = new Document();
 		FieldType tagsFieldType = new FieldType();
 		tagsFieldType.setStored(true);
-		tagsFieldType.setIndexed(true);
+		tagsFieldType.setIndexOptions(opts);
 		FieldType idFieldType = new FieldType();
 		idFieldType.setStored(true);
-		idFieldType.setIndexed(true);
+		idFieldType.setIndexOptions(opts);
 		idFieldType.setTokenized(false);
 
 		Field idField = new Field("id", "1", idFieldType);
