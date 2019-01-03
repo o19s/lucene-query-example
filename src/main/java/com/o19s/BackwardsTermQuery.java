@@ -79,26 +79,24 @@ public class BackwardsTermQuery extends Query {
         public void extractTerms(Set<Term> terms) {
 
         }
-
-
-//		@Override
-//		public float getValueForNormalization() throws IOException {
-//			return backwardsWeight() +
-//					forwardsWeight.getValueForNormalization();
-//		}
-//
-//		@Override
-//		public void normalize(float norm, float topLevelBoost) {
-//			backwardsWeight.normalize(norm, topLevelBoost);
-//			forwardsWeight.normalize(norm, topLevelBoost);
-//		}
 	
 		@Override
 		public Scorer scorer(LeafReaderContext context) throws IOException {
-			// TODO Auto-generated method stub
-			Scorer backwardsScorer = backwardsWeight.scorer(context);
-			Scorer forwardsScorer = forwardsWeight.scorer(context);
-			return new BackwardsScorer(this, context, backwardsScorer, forwardsScorer);
+			// TODO Fix this to account for null scorer to
+            // return no docs iterator
+            DocIdSetIterator backIter = DocIdSetIterator.empty();
+            DocIdSetIterator fwdIter = DocIdSetIterator.empty();
+            Scorer backwardsScorer = backwardsWeight.scorer(context);
+            Scorer forwardsScorer = forwardsWeight.scorer(context);
+
+            if (backwardsScorer != null) {
+                backIter = backwardsScorer.iterator();
+            }
+            if (forwardsScorer != null) {
+                fwdIter = forwardsScorer.iterator();
+            }
+
+			return new BackwardsScorer(this, context, backIter, fwdIter);
 		}
 	}
 	
@@ -108,14 +106,14 @@ public class BackwardsTermQuery extends Query {
 		final float FORWARDS_SCORE = 1.0f;
 		float currScore = 0.0f;
 		
-		Scorer backwardsScorer = null;
-		Scorer forwardsScorer = null;
+		DocIdSetIterator backwardsIterator = null;
+        DocIdSetIterator forwardIterator = null;
 		
 		protected BackwardsScorer(Weight weight, LeafReaderContext context,
-								  Scorer _backwardsScorer, Scorer _forwardsScorer) throws IOException {
+								  DocIdSetIterator _backwardsIter, DocIdSetIterator _forwardsIter) throws IOException {
 			super(weight);
-			backwardsScorer = _backwardsScorer;
-			forwardsScorer = _forwardsScorer;
+            backwardsIterator = _backwardsIter;
+            forwardIterator = _forwardsIter;
 		}
 
 		@Override
@@ -127,8 +125,8 @@ public class BackwardsTermQuery extends Query {
 		    return new DocIdSetIterator() {
                 @Override
                 public int docID() {
-                    int backwordsDocId = backwardsScorer.docID();
-                    int forwardsDocId = forwardsScorer.docID();
+                    int backwordsDocId = backwardsIterator.docID();
+                    int forwardsDocId = forwardIterator.docID();
                     if (backwordsDocId <= forwardsDocId && backwordsDocId != NO_MORE_DOCS) {
                         currScore = BACKWARDS_SCORE;
                         return backwordsDocId;
@@ -143,11 +141,11 @@ public class BackwardsTermQuery extends Query {
                 public int nextDoc() throws IOException {
                     int currDocId = docID();
                     // increment one or both
-                    if (currDocId == backwardsScorer.docID()) {
-                        backwardsScorer.iterator().nextDoc();
+                    if (currDocId == backwardsIterator.docID()) {
+                        backwardsIterator.nextDoc();
                     }
-                    if (currDocId == forwardsScorer.docID()) {
-                        forwardsScorer.iterator().nextDoc();
+                    if (currDocId == forwardIterator.docID()) {
+                        forwardIterator.nextDoc();
                     }
                     return docID();
                 }
@@ -155,8 +153,8 @@ public class BackwardsTermQuery extends Query {
 
                 @Override
                 public int advance(int target) throws IOException {
-                    backwardsScorer.iterator().advance(target);
-                    forwardsScorer.iterator().advance(target);
+                    backwardsIterator.advance(target);
+                    forwardIterator.advance(target);
                     return docID();                }
 
                 @Override
