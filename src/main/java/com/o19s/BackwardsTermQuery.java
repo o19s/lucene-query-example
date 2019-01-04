@@ -81,8 +81,6 @@ public class BackwardsTermQuery extends Query {
         }
 
         public void extractTerms(Set<Term> terms) {
-		    backwardsWeight.extractTerms(terms);
-		    forwardsWeight.extractTerms(terms);
 
         }
 
