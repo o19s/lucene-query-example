@@ -69,14 +69,10 @@ public class BackwardsTermQuery extends Query {
 		@Override
 		public Explanation explain(LeafReaderContext context, int doc)
 				throws IOException {
-
-			BackwardsScorer scorer = _scorer(context);
-
-			scorer.iterator().advance(doc);
-			return scorer.explain();
+			return null;
 		}
 
-        public boolean isCacheable(LeafReaderContext leaf) {
+        public boolean isCacheable(LeafReaderContext var1) {
 		    return false;
         }
 
@@ -85,8 +81,11 @@ public class BackwardsTermQuery extends Query {
 		    forwardsWeight.extractTerms(terms);
 
         }
-
-        private BackwardsScorer _scorer(LeafReaderContext context) throws IOException {
+	
+		@Override
+		public Scorer scorer(LeafReaderContext context) throws IOException {
+			// TODO Fix this to account for null scorer to
+            // return no docs iterator
             DocIdSetIterator backIter = DocIdSetIterator.empty();
             DocIdSetIterator fwdIter = DocIdSetIterator.empty();
             Scorer backwardsScorer = backwardsWeight.scorer(context);
@@ -98,13 +97,8 @@ public class BackwardsTermQuery extends Query {
             if (forwardsScorer != null) {
                 fwdIter = forwardsScorer.iterator();
             }
-            return new BackwardsScorer(this, context, backIter, fwdIter);
 
-        }
-	
-		@Override
-		public Scorer scorer(LeafReaderContext context) throws IOException {
-		    return this._scorer(context);
+			return new BackwardsScorer(this, context, backIter, fwdIter);
 		}
 	}
 	
@@ -116,95 +110,69 @@ public class BackwardsTermQuery extends Query {
 		
 		DocIdSetIterator backwardsIterator = null;
         DocIdSetIterator forwardIterator = null;
-        DocIdSetIterator iter = null;
-
+		
 		protected BackwardsScorer(Weight weight, LeafReaderContext context,
-								  DocIdSetIterator backwardsIter, DocIdSetIterator forwardsIter) throws IOException {
+								  DocIdSetIterator _backwardsIter, DocIdSetIterator _forwardsIter) throws IOException {
 			super(weight);
-            backwardsIterator = backwardsIter;
-            forwardIterator = forwardsIter;
+            backwardsIterator = _backwardsIter;
+            forwardIterator = _forwardsIter;
 		}
-
-		public Explanation explain() {
-            if (docID() == backwardsIterator.docID()) {
-                return Explanation.match(BACKWARDS_SCORE, "Backwards term match " + this.getWeight().getQuery());
-            } else if (docID() == forwardIterator.docID()) {
-                return Explanation.match(FORWARDS_SCORE, "Forward term match " + this.getWeight().getQuery());
-            }
-            return null;
-        }
 
 		@Override
 		public float score() throws IOException {
-			if (docID() == backwardsIterator.docID()) {
-			    return BACKWARDS_SCORE;
-            } else if (docID() == forwardIterator.docID()) {
-                return FORWARDS_SCORE;
-            }
-            return 0.0f;
+			return currScore;
 		}
 
         public DocIdSetIterator iterator() {
-		    iter = new Iterator(backwardsIterator, forwardIterator);
-		    return iter;
+		    return new DocIdSetIterator() {
+                @Override
+                public int docID() {
+                    int backwordsDocId = backwardsIterator.docID();
+                    int forwardsDocId = forwardIterator.docID();
+                    if (backwordsDocId <= forwardsDocId && backwordsDocId != NO_MORE_DOCS) {
+                        currScore = BACKWARDS_SCORE;
+                        return backwordsDocId;
+                    } else if (forwardsDocId != NO_MORE_DOCS) {
+                        currScore = FORWARDS_SCORE;
+                        return forwardsDocId;
+                    }
+                    return NO_MORE_DOCS;
+                }
+
+                @Override
+                public int nextDoc() throws IOException {
+                    int currDocId = docID();
+                    // increment one or both
+                    if (currDocId == backwardsIterator.docID()) {
+                        backwardsIterator.nextDoc();
+                    }
+                    if (currDocId == forwardIterator.docID()) {
+                        forwardIterator.nextDoc();
+                    }
+                    return docID();
+                }
+
+
+                @Override
+                public int advance(int target) throws IOException {
+                    backwardsIterator.advance(target);
+                    forwardIterator.advance(target);
+                    return docID();                }
+
+                @Override
+                public long cost() {
+                    return 1;
+                }
+            };
         }
 
 		@Override
 		public int docID() {
-			return iter.docID();
+			return iterator().docID();
 		}	
 
 
 	}
-
-	public class Iterator extends DocIdSetIterator {
-
-	    private DocIdSetIterator backwardsIterator;
-        private DocIdSetIterator forwardIterator;
-
-	    Iterator(DocIdSetIterator fwdIter, DocIdSetIterator bwdIter) {
-	        backwardsIterator = bwdIter;
-	        forwardIterator = fwdIter;
-        }
-
-        @Override
-        public int docID() {
-            int backwordsDocId = backwardsIterator.docID();
-            int forwardsDocId = forwardIterator.docID();
-            if (backwordsDocId <= forwardsDocId && backwordsDocId != NO_MORE_DOCS) {
-                return backwordsDocId;
-            } else if (forwardsDocId != NO_MORE_DOCS) {
-                return forwardsDocId;
-            }
-            return NO_MORE_DOCS;
-        }
-
-        @Override
-        public int nextDoc() throws IOException {
-            int currDocId = docID();
-            // increment one or both
-            if (currDocId == backwardsIterator.docID()) {
-                backwardsIterator.nextDoc();
-            }
-            if (currDocId == forwardIterator.docID()) {
-                forwardIterator.nextDoc();
-            }
-            return docID();
-        }
-
-
-        @Override
-        public int advance(int target) throws IOException {
-            backwardsIterator.advance(target);
-            forwardIterator.advance(target);
-            return docID();                }
-
-        @Override
-        public long cost() {
-            return 1;
-        }
-
-    }
 
 	@Override
 	public String toString(String field) {
