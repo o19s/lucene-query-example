@@ -1,5 +1,7 @@
 package com.o19s;
 
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
@@ -7,6 +9,9 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.search.QParser;
 import org.apache.solr.search.QueryParsing;
 import org.apache.solr.search.SyntaxError;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class BackwardsQParser extends QParser {
 
@@ -36,13 +41,24 @@ public class BackwardsQParser extends QParser {
     public Query parse() throws SyntaxError {
         String qText = getQueryText(qstr, localParams, params);
 
-        String field = getBestParam(localParams, params, "qf", null);
+        String qf = getBestParam(localParams, params, "qf", null);
 
-        if (field == null) {
+        // get fields on whitespace
+        String[] fields = qf.split("\\s+");
+
+        if (qf == null) {
             throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
                                     "qf required by backwards query parser");
         }
 
-        return new BackwardsTermQuery(field, qText);
+        BooleanQuery.Builder builder = new BooleanQuery.Builder();
+
+        for (String field: fields) {
+            Query btq = new BackwardsTermQuery(field, qText);
+            builder.add(btq, BooleanClause.Occur.SHOULD);
+        }
+
+        return builder.build();
+
     }
 }
