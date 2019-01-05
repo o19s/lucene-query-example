@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Set;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
@@ -80,8 +81,10 @@ public class BackwardsTermQuery extends Query {
 		    return false;
         }
 
+        @Override
         public void extractTerms(Set<Term> terms) {
-
+		    backwardsWeight.extractTerms(terms);
+		    forwardsWeight.extractTerms(terms);
         }
 
         private BackwardsScorer _scorer(LeafReaderContext context) throws IOException {
@@ -115,10 +118,13 @@ public class BackwardsTermQuery extends Query {
 		DocIdSetIterator backwardsIterator = null;
         DocIdSetIterator forwardIterator = null;
         DocIdSetIterator iter = null;
+        // NumericDocValues docVals = null;
 
 		protected BackwardsScorer(Weight weight, LeafReaderContext context,
 								  DocIdSetIterator backwardsIter, DocIdSetIterator forwardsIter) throws IOException {
 			super(weight);
+			// context.reader().getTermVectors(0);
+			// docVals = context.reader().getNumericDocValues("vote_count");
             backwardsIterator = backwardsIter;
             forwardIterator = forwardsIter;
 		}
@@ -134,7 +140,8 @@ public class BackwardsTermQuery extends Query {
 
 		@Override
 		public float score() throws IOException {
-			if (docID() == backwardsIterator.docID()) {
+		    //docVals.longValue();
+		    if (docID() == backwardsIterator.docID()) {
 			    return BACKWARDS_SCORE;
             } else if (docID() == forwardIterator.docID()) {
                 return FORWARDS_SCORE;
